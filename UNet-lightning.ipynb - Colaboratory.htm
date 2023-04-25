@@ -1,0 +1,1060 @@
+Automatic document saving has been pending for 2 minutes. Reloading may
+fix the problem. Save and reload the page <#>.
+
+Google Account
+Gaspard Ringuenet
+gaspard.ringuenet.srx@gmail.com
+This notebook is open with private outputs. Outputs will not be saved.
+You can disable this in Notebook settings <#>
+Open notebook settings
+
+.
+
+<https://drive.google.com/drive/search?q=owner%3Ame%20(type%3Aapplication%2Fvnd.google.colaboratory%20%7C%7C%20type%3Aapplication%2Fvnd.google.colab)&authuser=2>
+
+Rename notebook
+
+UNet-lightning.ipynb_
+
+Notebook unstarred
+
+Star notebook in Google Drive
+
+File
+ 
+Edit
+ 
+View
+ 
+Insert
+ 
+Runtime
+ 
+Tools
+ 
+Help
+ 
+All changes saved
+
+Comment
+
+Open comments pane
+
+Share
+
+Share notebook
+
+Open settings
+
+<https://accounts.google.com/SignOutOptions?hl=en&continue=https://colab.research.google.com/drive/163lswyRZM9hVRYH3GNXVFGbS2DewHmtc%3Fauthuser%3D2%26hl%3Den>
+
+
+      Files
+
+..
+
+OVER
+
+version_0
+
+…
+
+version_1
+
+…
+
+…
+
+UNet
+
+scripts
+
+config.py
+
+dataset.py
+
+model.py
+
+…
+
+…
+
+dataset
+
+echos
+
+…
+
+masks
+
+…
+
+…
+
+drive
+
+…
+
+lightning_logs
+
+version_0
+
+…
+
+version_1
+
+…
+
+…
+
+output
+
+…
+
+prepare_patches
+
+…
+
+sample_data
+
+…
+
+segmentation
+
+…
+
+requirements.txt
+
+utils2.py
+
+…
+
+Drop files to upload them to session storage
+
+Disk: 64.48 GB/78.19 GB
+
+Code
+Insert code cell below
+Ctrl+M B
+
+Text
+Add text cell
+
+Toggle header visibility
+
+Notebook
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+
+    0: Imports
+
+↳ 3 cells hidden
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+
+try:
+    import torch
+    import torchvision
+    v = torch.__version__.split(".")
+    assert (int(v[1]) >= 12 or int(v[0]) > 1), "torch version should be 1.12+"
+    assert int(torchvision.__version__.split(".")[1]) >= 13, "torchvision version should be 0.13+"
+    print(f"torch version: {torch.__version__}")
+    print(f"torchvision version: {torchvision.__version__}")
+except:
+    print(f"[INFO] torch/torchvision versions not as required, installing nightly versions.")
+    !pip3 install -U torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+    import torch
+    import torchvision
+    print(f"torch version: {torch.__version__}")
+    print(f"torchvision version: {torchvision.__version__}")
+
+torch version: 2.0.0+cu118
+torchvision version: 0.15.1+cu118
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+
+# to move between directories
+import os
+from pathlib import Path
+
+# PyTorch
+import torch
+from torch import optim, nn, utils, Tensor
+from torch.utils.data import DataLoader
+
+import torchvision
+from torchvision.transforms import ToTensor
+from torchvision import datasets, transforms
+
+# types and math
+from typing import Tuple, Dict, List
+import numpy as np
+import math
+import random
+
+# to plot
+import matplotlib.pyplot as plt
+from PIL import Image
+from matplotlib import colors
+from matplotlib import cm
+
+# trying to import lightning for easier experiments, installing it if it doesn't work
+try:
+    import lightning.pytorch as pl
+except:
+    !pip install lightning
+    import lightning.pytorch as pl
+
+# tensorboard for experiment tracking (default with PyTorch Lightning)
+import tensorboard
+
+Looking in indexes: https://pypi.org/simple <https://pypi.org/simple>, https://us-python.pkg.dev/colab-wheels/public/simple/ <https://us-python.pkg.dev/colab-wheels/public/simple/>
+Collecting lightning
+  Downloading lightning-2.0.2-py3-none-any.whl (1.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 64.8 MB/s eta 0:00:00
+Requirement already satisfied: websocket-client<3.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (1.5.1)
+Requirement already satisfied: psutil<7.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (5.9.5)
+Requirement already satisfied: requests<4.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (2.27.1)
+Requirement already satisfied: PyYAML<8.0,>=5.4 in /usr/local/lib/python3.9/dist-packages (from lightning) (6.0)
+Requirement already satisfied: typing-extensions<6.0,>=4.0.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (4.5.0)
+Collecting pytorch-lightning
+  Downloading pytorch_lightning-2.0.2-py3-none-any.whl (719 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 719.0/719.0 kB 55.5 MB/s eta 0:00:00
+Collecting starlette
+  Downloading starlette-0.26.1-py3-none-any.whl (66 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 66.9/66.9 kB 5.7 MB/s eta 0:00:00
+Requirement already satisfied: fsspec[http]<2025.0,>2021.06.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (2023.4.0)
+Requirement already satisfied: numpy<3.0,>=1.17.2 in /usr/local/lib/python3.9/dist-packages (from lightning) (1.22.4)
+Requirement already satisfied: torch<4.0,>=1.11.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (2.0.0+cu118)
+Collecting uvicorn<2.0
+  Downloading uvicorn-0.21.1-py3-none-any.whl (57 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 57.8/57.8 kB 7.1 MB/s eta 0:00:00
+Requirement already satisfied: traitlets<7.0,>=5.3.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (5.7.1)
+Requirement already satisfied: packaging in /usr/local/lib/python3.9/dist-packages (from lightning) (23.1)
+Requirement already satisfied: rich<15.0,>=12.3.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (13.3.4)
+Collecting arrow<3.0,>=1.2.0
+  Downloading arrow-1.2.3-py3-none-any.whl (66 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 66.4/66.4 kB 9.2 MB/s eta 0:00:00
+Collecting fastapi<0.89.0,>=0.69.0
+  Downloading fastapi-0.88.0-py3-none-any.whl (55 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 55.5/55.5 kB 7.9 MB/s eta 0:00:00
+Collecting croniter<1.4.0,>=1.3.0
+  Downloading croniter-1.3.14-py2.py3-none-any.whl (18 kB)
+Collecting inquirer<5.0,>=2.10.0
+  Downloading inquirer-3.1.3-py3-none-any.whl (18 kB)
+Collecting deepdiff<8.0,>=5.7.0
+  Downloading deepdiff-6.3.0-py3-none-any.whl (69 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 69.7/69.7 kB 9.7 MB/s eta 0:00:00
+Collecting websockets<12.0
+  Downloading websockets-11.0.2-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (129 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 129.7/129.7 kB 17.8 MB/s eta 0:00:00
+Collecting lightning-utilities<2.0,>=0.7.0
+  Downloading lightning_utilities-0.8.0-py3-none-any.whl (20 kB)
+Requirement already satisfied: urllib3<3.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (1.26.15)
+Requirement already satisfied: Jinja2<5.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (3.1.2)
+Requirement already satisfied: pydantic<4.0,>=1.7.4 in /usr/local/lib/python3.9/dist-packages (from lightning) (1.10.7)
+Requirement already satisfied: beautifulsoup4<6.0,>=4.8.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (4.11.2)
+Requirement already satisfied: click<10.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (8.1.3)
+Collecting lightning-cloud>=0.5.34
+  Downloading lightning_cloud-0.5.34-py3-none-any.whl (557 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 557.1/557.1 kB 51.9 MB/s eta 0:00:00
+Collecting torchmetrics<2.0,>=0.7.0
+  Downloading torchmetrics-0.11.4-py3-none-any.whl (519 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 519.2/519.2 kB 46.1 MB/s eta 0:00:00
+Collecting dateutils<2.0
+  Downloading dateutils-0.6.12-py2.py3-none-any.whl (5.7 kB)
+Requirement already satisfied: tqdm<6.0,>=4.57.0 in /usr/local/lib/python3.9/dist-packages (from lightning) (4.65.0)
+Collecting starsessions<2.0,>=1.2.1
+  Downloading starsessions-1.3.0-py3-none-any.whl (10 kB)
+Requirement already satisfied: python-dateutil>=2.7.0 in /usr/local/lib/python3.9/dist-packages (from arrow<3.0,>=1.2.0->lightning) (2.8.2)
+Requirement already satisfied: soupsieve>1.2 in /usr/local/lib/python3.9/dist-packages (from beautifulsoup4<6.0,>=4.8.0->lightning) (2.4.1)
+Requirement already satisfied: pytz in /usr/local/lib/python3.9/dist-packages (from dateutils<2.0->lightning) (2022.7.1)
+Collecting ordered-set<4.2.0,>=4.0.2
+  Downloading ordered_set-4.1.0-py3-none-any.whl (7.6 kB)
+Collecting starlette
+  Downloading starlette-0.22.0-py3-none-any.whl (64 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 64.3/64.3 kB 9.7 MB/s eta 0:00:00
+Requirement already satisfied: anyio<5,>=3.4.0 in /usr/local/lib/python3.9/dist-packages (from starlette->lightning) (3.6.2)
+Collecting aiohttp!=4.0.0a0,!=4.0.0a1
+  Downloading aiohttp-3.8.4-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.0/1.0 MB 72.5 MB/s eta 0:00:00
+Collecting readchar>=3.0.6
+  Downloading readchar-4.0.5-py3-none-any.whl (8.5 kB)
+Collecting blessed>=1.19.0
+  Downloading blessed-1.20.0-py2.py3-none-any.whl (58 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 58.4/58.4 kB 5.6 MB/s eta 0:00:00
+Collecting python-editor>=1.0.4
+  Downloading python_editor-1.0.4-py3-none-any.whl (4.9 kB)
+Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.9/dist-packages (from Jinja2<5.0->lightning) (2.1.2)
+Collecting python-multipart
+  Downloading python_multipart-0.0.6-py3-none-any.whl (45 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45.7/45.7 kB 5.9 MB/s eta 0:00:00
+Collecting pyjwt
+  Downloading PyJWT-2.6.0-py3-none-any.whl (20 kB)
+Requirement already satisfied: six in /usr/local/lib/python3.9/dist-packages (from lightning-cloud>=0.5.34->lightning) (1.16.0)
+Requirement already satisfied: charset-normalizer~=2.0.0 in /usr/local/lib/python3.9/dist-packages (from requests<4.0->lightning) (2.0.12)
+Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.9/dist-packages (from requests<4.0->lightning) (3.4)
+Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.9/dist-packages (from requests<4.0->lightning) (2022.12.7)
+Requirement already satisfied: markdown-it-py<3.0.0,>=2.2.0 in /usr/local/lib/python3.9/dist-packages (from rich<15.0,>=12.3.0->lightning) (2.2.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in /usr/local/lib/python3.9/dist-packages (from rich<15.0,>=12.3.0->lightning) (2.14.0)
+Requirement already satisfied: itsdangerous<3.0.0,>=2.0.1 in /usr/local/lib/python3.9/dist-packages (from starsessions<2.0,>=1.2.1->lightning) (2.1.2)
+Requirement already satisfied: sympy in /usr/local/lib/python3.9/dist-packages (from torch<4.0,>=1.11.0->lightning) (1.11.1)
+Requirement already satisfied: networkx in /usr/local/lib/python3.9/dist-packages (from torch<4.0,>=1.11.0->lightning) (3.1)
+Requirement already satisfied: triton==2.0.0 in /usr/local/lib/python3.9/dist-packages (from torch<4.0,>=1.11.0->lightning) (2.0.0)
+Requirement already satisfied: filelock in /usr/local/lib/python3.9/dist-packages (from torch<4.0,>=1.11.0->lightning) (3.11.0)
+Requirement already satisfied: cmake in /usr/local/lib/python3.9/dist-packages (from triton==2.0.0->torch<4.0,>=1.11.0->lightning) (3.25.2)
+Requirement already satisfied: lit in /usr/local/lib/python3.9/dist-packages (from triton==2.0.0->torch<4.0,>=1.11.0->lightning) (16.0.1)
+Collecting h11>=0.8
+  Downloading h11-0.14.0-py3-none-any.whl (58 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 58.3/58.3 kB 6.6 MB/s eta 0:00:00
+Collecting multidict<7.0,>=4.5
+  Downloading multidict-6.0.4-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (114 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 114.2/114.2 kB 15.4 MB/s eta 0:00:00
+Collecting frozenlist>=1.1.1
+  Downloading frozenlist-1.3.3-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (158 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 158.8/158.8 kB 15.7 MB/s eta 0:00:00
+Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.9/dist-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<2025.0,>2021.06.0->lightning) (23.1.0)
+Collecting aiosignal>=1.1.2
+  Downloading aiosignal-1.3.1-py3-none-any.whl (7.6 kB)
+Collecting async-timeout<5.0,>=4.0.0a3
+  Downloading async_timeout-4.0.2-py3-none-any.whl (5.8 kB)
+Collecting yarl<2.0,>=1.0
+  Downloading yarl-1.9.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (269 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 269.3/269.3 kB 34.6 MB/s eta 0:00:00
+Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.9/dist-packages (from anyio<5,>=3.4.0->starlette->lightning) (1.3.0)
+Requirement already satisfied: wcwidth>=0.1.4 in /usr/local/lib/python3.9/dist-packages (from blessed>=1.19.0->inquirer<5.0,>=2.10.0->lightning) (0.2.6)
+Requirement already satisfied: mdurl~=0.1 in /usr/local/lib/python3.9/dist-packages (from markdown-it-py<3.0.0,>=2.2.0->rich<15.0,>=12.3.0->lightning) (0.1.2)
+Requirement already satisfied: setuptools>=41.0 in /usr/local/lib/python3.9/dist-packages (from readchar>=3.0.6->inquirer<5.0,>=2.10.0->lightning) (67.7.1)
+Requirement already satisfied: mpmath>=0.19 in /usr/local/lib/python3.9/dist-packages (from sympy->torch<4.0,>=1.11.0->lightning) (1.3.0)
+Installing collected packages: python-editor, websockets, readchar, python-multipart, pyjwt, ordered-set, multidict, lightning-utilities, h11, frozenlist, blessed, async-timeout, yarl, uvicorn, starlette, inquirer, deepdiff, dateutils, croniter, arrow, aiosignal, starsessions, fastapi, aiohttp, lightning-cloud, torchmetrics, pytorch-lightning, lightning
+Successfully installed aiohttp-3.8.4 aiosignal-1.3.1 arrow-1.2.3 async-timeout-4.0.2 blessed-1.20.0 croniter-1.3.14 dateutils-0.6.12 deepdiff-6.3.0 fastapi-0.88.0 frozenlist-1.3.3 h11-0.14.0 inquirer-3.1.3 lightning-2.0.2 lightning-cloud-0.5.34 lightning-utilities-0.8.0 multidict-6.0.4 ordered-set-4.1.0 pyjwt-2.6.0 python-editor-1.0.4 python-multipart-0.0.6 pytorch-lightning-2.0.2 readchar-4.0.5 starlette-0.22.0 starsessions-1.3.0 torchmetrics-0.11.4 uvicorn-0.21.1 websockets-11.0.2 yarl-1.9.1
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+
+# Try to import custom files, downloading from GitHub if it doesn't work
+try:
+    from prepare_patches import get_data, utils, visualize
+except:
+    # Get the prepare_patches scripts
+    print("[INFO] Couldn't find prepare_patches scripts... downloading them from GitHub.")
+    !git clone https://github.com/GaspardRgt/automatic-echogram-classification
+    !mv automatic-echogram-classification/prepare_patches .
+    !mv automatic-echogram-classification/UNet .
+    !mv automatic-echogram-classification/segmentation .
+    !rm -rf automatic-echogram-classification
+
+    from prepare_patches import get_data, utils, visualize
+    from segmentation import transforms as segtrans
+    from UNet.scripts import config, dataset, model
+    os.mkdir(Path("./output"))
+
+[INFO] Couldn't find prepare_patches scripts... downloading them from GitHub.
+Cloning into 'automatic-echogram-classification'...
+remote: Enumerating objects: 50, done.
+remote: Counting objects: 100% (50/50), done.
+remote: Compressing objects: 100% (39/39), done.
+remote: Total 50 (delta 7), reused 50 (delta 7), pack-reused 0
+Unpacking objects: 100% (50/50), 4.37 MiB | 4.23 MiB/s, done.
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+ψ
+## 1: Retrieving sample data from mounted google drive 
+(ABRACOS1 LEG1 EI001)
+
+## 1: Retrieving sample data from mounted google drive (ABRACOS1 LEG1 EI001)
+
+Enter to Rename, Shift+Enter to Preview
+
+
+    1: Retrieving sample data from mounted google drive (ABRACOS1 LEG1
+    EI001)
+
+↳ 1 cell hidden
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+
+!python prepare_patches/create_patch_dataset.py --data_path "/content/drive/MyDrive/Colab Notebooks/Stage/data_sup_dir/LEG1" \
+ --dest_path "/content"
+
+Retrieving data from: /content/drive/MyDrive/Colab Notebooks/Stage/data_sup_dir/LEG1/EI001...
+Files retrieved: (<HDF5 file "Echointegration.mat" (mode r)>, <HDF5 file "Method_SvDiff_2_Abra01-Leg1-EI001-30-040_classif_6groups.mat" (mode r)>)
+
+Sv_surface tensor shape: torch.Size([4, 280, 31398]) -> [color_channels (4), height, width] (CHW)
+Best_class tensor shape: torch.Size([280, 31398]) -> [height, width]
+Collecting patches from EI001 of LEG1...
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+ψ
+## 2: Building UNet `LightningModule`
+
+## 2: Building UNet `LightningModule`
+
+Enter to Rename, Shift+Enter to Preview
+
+
+    2: Building UNet |LightningModule|
+
+↳ 6 cells hidden
+Code
+
+Text
+
+------------------------------------------------------------------------
+1
+2
+3
+# define nn.Modules
+model_0 = model.UNet()
+
+# define nn.Modules model_0 = model.UNet()
+
+Enter to Rename, Shift+Enter to Preview
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+
+# import utils (namely dice_coeff function)
+import requests
+
+utils_path = Path("/content/utils2.py")
+if not utils_path.is_file():
+    with open(utils_path, "wb") as f:
+        request = requests.get("https://raw.githubusercontent.com/YanglanOu/patcher/master/utils.py")
+        print(f"Downloading {utils_path}...")
+        f.write(request.content)
+        f.close()
+    with open(Path("/content/requirements.txt"), "wb") as f:
+        request = requests.get("https://raw.githubusercontent.com/YanglanOu/patcher/master/requirements.txt")
+        print("Updating requirements...")
+        f.write(request.content)
+    !pip install -r requirements.txt
+else:
+    print(f"{utils_path} already exists, skipping download.")
+
+/content/utils2.py already exists, skipping download.
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+
+from UNet.scripts import config
+from utils2 import *
+
+class LitUNet(pl.LightningModule):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+        self.criterion = nn.BCEWithLogitsLoss()
+        self.out = nn.Sigmoid()
+        self.preds = []
+    
+    def training_step(self, batch, batch_idx):
+        echos, true_masks = batch
+
+        masks_pred = self.model(echos)
+        masks_pred_b = self.out(masks_pred)
+        masks_pred_b = (masks_pred_b > config.THRESHOLD).float()
+
+        loss = self.criterion(masks_pred, true_masks)
+        dice = dice_coeff(masks_pred_b.cpu().numpy(), true_masks.cpu().numpy())
+
+        assignment = masks_pred.argmax(dim=1)
+        target = true_masks.argmax(dim=1)
+        acc = (assignment==target).float().mean()
+
+        self.log('train_loss', loss, on_step=False, on_epoch=True)
+        self.log('train_dice', dice, on_step=False, on_epoch=True)  
+        self.log('acc', acc, on_step=False, on_epoch=True)  
+
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.model.parameters(),
+                               lr=config.INIT_LR)
+        return optimizer
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+
+unet_v0 = LitUNet(model_0)
+unet_v0
+
+LitUNet(
+  (model): UNet(
+    (encoder): Encoder(
+      (encBlocks): ModuleList(
+        (0): Block(
+          (conv1): Conv2d(4, 16, kernel_size=(3, 3), stride=(1, 1))
+          (relu): ReLU()
+          (conv2): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1))
+        )
+        (1): Block(
+          (conv1): Conv2d(16, 32, kernel_size=(3, 3), stride=(1, 1))
+          (relu): ReLU()
+          (conv2): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        )
+        (2): Block(
+          (conv1): Conv2d(32, 64, kernel_size=(3, 3), stride=(1, 1))
+          (relu): ReLU()
+          (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1))
+        )
+      )
+      (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+    )
+    (decoder): Decoder(
+      (upconvs): ModuleList(
+        (0): ConvTranspose2d(64, 32, kernel_size=(2, 2), stride=(2, 2))
+        (1): ConvTranspose2d(32, 16, kernel_size=(2, 2), stride=(2, 2))
+      )
+      (dec_blocks): ModuleList(
+        (0): Block(
+          (conv1): Conv2d(64, 32, kernel_size=(3, 3), stride=(1, 1))
+          (relu): ReLU()
+          (conv2): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        )
+        (1): Block(
+          (conv1): Conv2d(32, 16, kernel_size=(3, 3), stride=(1, 1))
+          (relu): ReLU()
+          (conv2): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1))
+        )
+      )
+    )
+    (head): Conv2d(16, 9, kernel_size=(1, 1), stride=(1, 1))
+  )
+  (criterion): BCEWithLogitsLoss()
+  (out): Sigmoid()
+)
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+
+# Try to get torchinfo, install it if it doesn't work
+try:
+    from torchinfo import summary
+except:
+    print("[INFO] Couldn't find torchinfo... installing it.")
+    !pip install -q torchinfo
+    from torchinfo import summary
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+
+summary(model=model_0, 
+        input_size=(16, 4, 224, 224),
+        col_names=["input_size", "output_size", "num_params", "trainable"],
+        col_width=20,
+        row_settings=["var_names"]
+)
+
+/usr/local/lib/python3.9/dist-packages/torchinfo/torchinfo.py:477: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  action_fn=lambda data: sys.getsizeof(data.storage()),
+/usr/local/lib/python3.9/dist-packages/torch/storage.py:665: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return super().__sizeof__() + self.nbytes()
+
+========================================================================================================================
+Layer (type (var_name))                  Input Shape          Output Shape         Param #              Trainable
+========================================================================================================================
+UNet (UNet)                              [16, 4, 224, 224]    [16, 9, 224, 224]    --                   True
+├─Encoder (encoder)                      [16, 4, 224, 224]    [16, 16, 220, 220]   --                   True
+│    └─ModuleList (encBlocks)            --                   --                   (recursive)          True
+│    │    └─Block (0)                    [16, 4, 224, 224]    [16, 16, 220, 220]   2,912                True
+│    └─MaxPool2d (pool)                  [16, 16, 220, 220]   [16, 16, 110, 110]   --                   --
+│    └─ModuleList (encBlocks)            --                   --                   (recursive)          True
+│    │    └─Block (1)                    [16, 16, 110, 110]   [16, 32, 106, 106]   13,888               True
+│    └─MaxPool2d (pool)                  [16, 32, 106, 106]   [16, 32, 53, 53]     --                   --
+│    └─ModuleList (encBlocks)            --                   --                   (recursive)          True
+│    │    └─Block (2)                    [16, 32, 53, 53]     [16, 64, 49, 49]     55,424               True
+│    └─MaxPool2d (pool)                  [16, 64, 49, 49]     [16, 64, 24, 24]     --                   --
+├─Decoder (decoder)                      [16, 64, 49, 49]     [16, 16, 184, 184]   --                   True
+│    └─ModuleList (upconvs)              --                   --                   (recursive)          True
+│    │    └─ConvTranspose2d (0)          [16, 64, 49, 49]     [16, 32, 98, 98]     8,224                True
+│    └─ModuleList (dec_blocks)           --                   --                   (recursive)          True
+│    │    └─Block (0)                    [16, 64, 98, 98]     [16, 32, 94, 94]     27,712               True
+│    └─ModuleList (upconvs)              --                   --                   (recursive)          True
+│    │    └─ConvTranspose2d (1)          [16, 32, 94, 94]     [16, 16, 188, 188]   2,064                True
+│    └─ModuleList (dec_blocks)           --                   --                   (recursive)          True
+│    │    └─Block (1)                    [16, 32, 188, 188]   [16, 16, 184, 184]   6,944                True
+├─Conv2d (head)                          [16, 16, 184, 184]   [16, 9, 184, 184]    153                  True
+========================================================================================================================
+Total params: 117,321
+Trainable params: 117,321
+Non-trainable params: 0
+Total mult-adds (G): 17.34
+========================================================================================================================
+Input size (MB): 12.85
+Forward/backward pass size (MB): 699.69
+Params size (MB): 0.47
+Estimated Total Size (MB): 713.00
+========================================================================================================================
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+ψ
+## 3: Preparing dataset
+
+## 3: Preparing dataset
+
+Enter to Rename, Shift+Enter to Preview
+
+
+    3: Preparing dataset
+
+↳ 2 cells hidden
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+
+from sklearn.model_selection import train_test_split
+
+# load the image and mask filepaths in a sorted manner
+imagePaths = [os.path.join(config.IMAGE_DATASET_PATH, file_path) for file_path in sorted(os.listdir(config.IMAGE_DATASET_PATH))]
+maskPaths = [os.path.join(config.MASK_DATASET_PATH, file_path) for file_path in sorted(os.listdir(config.MASK_DATASET_PATH))]
+
+# partition the data into training and testing splits using 85% of the data for training and the remaining 15% for testing
+split = train_test_split(imagePaths,
+                         maskPaths,
+                         test_size=config.TEST_SPLIT,
+                         random_state=42)
+
+# unpack the data split
+(trainImages, testImages) = split[:2]
+(trainMasks, testMasks) = split[2:]
+
+# write the testing image paths to disk so that we can use then when evaluating/testing our model
+print("[INFO] saving testing image paths...")
+f = open(config.TEST_PATHS, "w")
+f.write("\n".join(testImages))
+f.close()
+
+[INFO] saving testing image paths...
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ 42
+ 43
+
+# define transformations
+class Im2Mask:
+    def __init__(self, target_channels):
+        self.target_channels = target_channels
+
+    def __call__(self, image, target):      
+        l = []
+        for i in range(9):
+            l.append(torch.where(target==float(i), 1., 0.).unsqueeze(0))
+        return image, torch.cat(l, axis=0)
+
+
+transforms = segtrans.Compose([
+    #segtrans.RandomResize(100, 300),
+    Im2Mask(target_channels=9),
+    segtrans.ConvertImageDtype(dtype=torch.float32),
+    segtrans.RandomHorizontalFlip(flip_prob=0.5),
+])
+
+# create the train and test datasets
+trainDS = dataset.SegmentationDataset(imagePaths=trainImages, 
+                              maskPaths=trainMasks,
+                              transforms=transforms)
+
+testDS = dataset.SegmentationDataset(imagePaths=testImages,
+                             maskPaths=testMasks,
+                             transforms=transforms)
+
+print(f"[INFO] found {len(trainDS)} examples in the training set...")
+print(f"[INFO] found {len(testDS)} examples in the test set...")
+
+# create the training and test data loaders
+trainLoader = DataLoader(trainDS,
+                         shuffle=True,
+                         batch_size=16,
+                         pin_memory=config.PIN_MEMORY,
+                         num_workers=os.cpu_count())
+
+testLoader = DataLoader(testDS,
+                        shuffle=False,
+                        batch_size=16,
+                        pin_memory=config.PIN_MEMORY,
+                        num_workers=os.cpu_count())
+
+[INFO] found 104 examples in the training set...
+[INFO] found 19 examples in the test set...
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+
+    4: Train the model
+
+↳ 2 cells hidden
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+  1
+  2
+  3
+
+trainer = pl.Trainer(log_every_n_steps=1, max_epochs=5)
+trainer.fit(model=unet_v0, 
+            train_dataloaders=trainLoader)
+
+Code
+
+Text
+
+------------------------------------------------------------------------
+
+1
+2
+%load_ext tensorboard
+%tensorboard --logdir /content/lightning_logs
+
+%load_ext tensorboard %tensorboard --logdir /content/lightning_logs
+
+Enter to Rename, Shift+Enter to Preview
+Code
+
+Text
+
+------------------------------------------------------------------------
+Colab paid products
+<https://colab.research.google.com/signup?utm_source=footer&utm_medium=link&utm_campaign=footer_links> - Cancel contracts here <https://colab.research.google.com/cancel-subscription>
+
+Locate in Drive
+Open in playground mode
+New notebook
+Open notebook
+Upload notebook
+Rename
+Move
+Move to trash
+Save a copy in Drive
+Save a copy as a GitHub Gist
+Save a copy in GitHub
+Save
+Save and pin revision
+Revision history
+Download ►
+Print
+Download .ipynb
+Download .py
+Undo
+Redo
+Select all cells
+Cut cell or selection
+Copy cell or selection
+Paste
+Delete selected cells
+Find and replace
+Find next
+Find previous
+Notebook settings
+Clear all outputs
+Table of contents
+Notebook info
+Executed code history
+Comments sidebar
+Collapse sections
+Expand sections
+Save collapsed section layout
+Show/hide code
+Show/hide output
+Focus next tab
+Focus previous tab
+Move tab to next pane
+Move tab to previous pane
+Code cell
+Text cell
+Section header cell
+Scratch code cell
+Code snippets
+Add a form field
+Run allCtrl+F9
+Run beforeCtrl+F8
+Run the focused cellCtrl+Enter
+Run selectionCtrl+Shift+Enter
+Run afterCtrl+F10
+Interrupt executionCtrl+M I
+Restart runtimeCtrl+M .
+Restart and run all
+Disconnect and delete runtime
+Change runtime type
+Manage sessions
+View resources
+View runtime logs
+Command palette
+Settings
+Keyboard shortcuts
+Diff notebooks
+Frequently asked questions
+View release notes
+Search code snippets
+Report a bug
+Report Drive abuse
+Send feedback
+Add a comment
+log_every_n_steps: int | None = None, hint
