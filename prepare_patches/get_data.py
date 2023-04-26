@@ -162,7 +162,7 @@ class Im2Mask:
         l = []
         for i in range(9):
             l.append(torch.where(image==float(i), 1., 0.).unsqueeze(0))
-        return image, torch.cat(l, axis=0)
+        return torch.cat(l, axis=0)
     
 
 def saveSquaresFromGrid(Centers:np.ndarray,
