@@ -158,10 +158,10 @@ class Im2Mask:
     def __init__(self, target_channels):
         self.target_channels = target_channels
 
-    def __call__(self, image, target):      
+    def __call__(self, image):      
         l = []
         for i in range(9):
-            l.append(torch.where(target==float(i), 1., 0.).unsqueeze(0))
+            l.append(torch.where(image==float(i), 1., 0.).unsqueeze(0))
         return image, torch.cat(l, axis=0)
     
 
@@ -195,10 +195,11 @@ def saveSquaresFromGrid(Centers:np.ndarray,
                        save_path_data)
             
             # Saving masks
+            im2mask = Im2Mask(target_channels=9)
             torch.save(cropNcopy(ndim=2,
                                  image_tensor=masks,
                                  center=center,
                                  dx=patch_width,
                                  dy=patch_height,
-                                 transform=Im2Mask), 
+                                 transform=im2mask), 
                        save_path_masks)
