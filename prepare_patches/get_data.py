@@ -10,6 +10,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+
 # Thresholding function
 def ApplyThresholds(x: torch.Tensor(), low:int = -80., high: int = None):      # A lot faster using native functions
     """Applies a threshold on a CHW tensor by limiting values to a minimum (low) and a maximum (high). 
@@ -29,6 +30,7 @@ def ApplyThresholds(x: torch.Tensor(), low:int = -80., high: int = None):      #
     else:
         return torch.maximum(torch.nan_to_num(x, nan=low),
                              low_tensor)
+    
 
 # A function to remove the signal of fishes (not included in the classification)
 def ApplyMask(x: torch.Tensor(), mask: torch.Tensor(), low: torch.float = -80.):
@@ -42,6 +44,7 @@ def ApplyMask(x: torch.Tensor(), mask: torch.Tensor(), low: torch.float = -80.):
     """
     assert x.shape == mask.shape, "Data and Mask should have same shape"
     return torch.nan_to_num(torch.add(x, mask), nan=low)
+
 
 # Retrieving data and returning in the right format
 def getData(dir_path: str or PosixPath,
@@ -105,6 +108,7 @@ def getData(dir_path: str or PosixPath,
 
     return Sv_surface_01, Ind_best_class
 
+
 def layoutRandomGrid(img: torch.Tensor(), 
                      grid_dx: int = 36, 
                      grid_dy: int = 36,
@@ -133,13 +137,33 @@ def layoutRandomGrid(img: torch.Tensor(),
     
     return Layout_Grid
 
-def cropNcopy(ndim:int, image_tensor:torch.Tensor(), center:tuple, dx:int = 224, dy:int = 224):
+# crop and save a copy of the data in dataset directory. For maks, apply a custom torch.transforms to obtain a regular format mask
+
+
+def cropNcopy(ndim:int, image_tensor:torch.Tensor(), center:tuple, dx:int = 224, dy:int = 224, transform=None):
     x, y = center
     assert ndim == 2 or ndim == 3, "ndmin should be 2 or 3"
     if ndim == 2:
-        return image_tensor[y-dy//2:y+dy//2, x-dx//2:x+dx//2]
+        if transform:
+            return transform(image_tensor[y-dy//2:y+dy//2, x-dx//2:x+dx//2])
+        else:
+            return image_tensor[y-dy//2:y+dy//2, x-dx//2:x+dx//2]
     else:
-        return image_tensor[:, y-dy//2:y+dy//2, x-dx//2:x+dx//2]
+        if transform:
+            return transform(image_tensor[:, y-dy//2:y+dy//2, x-dx//2:x+dx//2])
+        else:
+            return image_tensor[:, y-dy//2:y+dy//2, x-dx//2:x+dx//2]
+    
+class Im2Mask:
+    def __init__(self, target_channels):
+        self.target_channels = target_channels
+
+    def __call__(self, image, target):      
+        l = []
+        for i in range(9):
+            l.append(torch.where(target==float(i), 1., 0.).unsqueeze(0))
+        return image, torch.cat(l, axis=0)
+    
 
 def saveSquaresFromGrid(Centers:np.ndarray,
                     patch_width:int,
@@ -163,7 +187,18 @@ def saveSquaresFromGrid(Centers:np.ndarray,
 
             center = Centers[i]
             # Saving data
-            torch.save(cropNcopy(3, image_tensor, center, patch_width, patch_height), save_path_data)
+            torch.save(cropNcopy(ndim=3, 
+                                 image_tensor=image_tensor,
+                                 center=center, 
+                                 dx=patch_width,
+                                 dy=patch_height),
+                       save_path_data)
             
             # Saving masks
-            torch.save(cropNcopy(2, masks, center, patch_width, patch_height), save_path_masks)
+            torch.save(cropNcopy(ndim=2,
+                                 image_tensor=masks,
+                                 center=center,
+                                 dx=patch_width,
+                                 dy=patch_height,
+                                 transform=Im2Mask), 
+                       save_path_masks)
