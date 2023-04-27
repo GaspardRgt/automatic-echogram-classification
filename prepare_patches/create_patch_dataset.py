@@ -42,6 +42,9 @@ parser.add_argument("--patch_height",
 parser.add_argument("--patch_width",
                     default=224)
 
+parser.add_argument("--bin_mask",
+                    default=False)
+
 args = parser.parse_args()
 
 # Creating directories
@@ -80,4 +83,5 @@ for path in os.listdir(DATA_PATH):
                         patch_height=224,
                         image_tensor=Sv_surface,
                         masks=Ind_best_class,
-                        dataset_dir=DATASET_PATH)
+                        dataset_dir=DATASET_PATH,
+                        bin_mask=args.bin_mask)

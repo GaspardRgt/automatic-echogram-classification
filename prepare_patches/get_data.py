@@ -170,7 +170,8 @@ def saveSquaresFromGrid(Centers:np.ndarray,
                     patch_height:int, 
                     image_tensor:torch.Tensor(),
                     masks:torch.Tensor(),
-                    dataset_dir:str or PosixPath):
+                    dataset_dir:str or PosixPath,
+                    bin_mask:bool = False):
     
     ei_filepath = Path(os.getcwd())
     ei = os.path.basename(ei_filepath)
@@ -195,11 +196,14 @@ def saveSquaresFromGrid(Centers:np.ndarray,
                        save_path_data)
             
             # Saving masks
-            im2mask = Im2Mask(target_channels=9)
+            if bin_mask:
+                im2mask = Im2Mask(target_channels=9)
+            else:
+                im2mask = None
             torch.save(cropNcopy(ndim=2,
-                                 image_tensor=masks,
-                                 center=center,
-                                 dx=patch_width,
-                                 dy=patch_height,
-                                 transform=im2mask), 
-                       save_path_masks)
+                                image_tensor=masks,
+                                center=center,
+                                dx=patch_width,
+                                dy=patch_height,
+                                transform=im2mask), 
+                    save_path_masks)
