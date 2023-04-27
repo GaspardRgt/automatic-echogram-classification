@@ -100,6 +100,8 @@ def getData(dir_path: str or PosixPath,
         input=torch.from_numpy(np.array(CLASSES.get('ind_Best_class'))[:, depthmin:depthmax]).permute(1, 0),
         nan=-2.) + 2.
     
+    Ind_best_class = Ind_best_class.to(torch.long)
+    
     EI.close()
     CLASSES.close()
 
